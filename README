@@ -1,0 +1,48 @@
+Loop Call Weirdness:
+http://eli.thegreenplace.net/2013/12/03/intel-i7-loop-performance-anomaly/
+
+Confusing case where adding additional instructions makes a loop faster.
+
+Usage: 
+
+You will need to comment out the IACA line in the Makefile if you
+don't have it installed.  Useful for analaysis, but not necessary to
+run:
+http://software.intel.com/en-us/articles/intel-architecture-code-analyzer
+
+nate@fastpfor:~/git/loop-call-weirdness$ make test
+gcc -O2 -O2 loop-call-weirdness.c -o loop-call-weirdness
+gcc -O2 -O2 -DIACA -c loop-call-weirdness.c -o iaca.o
+run_all.sh
+tight, 3001715771, cycles, 0.01%
+variable, 3001286809, cycles, 0.00%
+call, 2802080562, cycles, 0.00%
+write, 2794980288, cycles, 0.47%
+prefetch, 2532314708, cycles, 0.58%
+selfdummy, 2424865808, cycles, 0.20%
+jump, 2416657598, cycles, 0.18%
+dummyread, 2422786648, cycles, 0.26%
+2mod, 2404006892, cycles, 0.03%
+exchange, 2406538561, cycles, 0.01%
+
+Oddnesses:  
+
+tight, call:
+As pointed out by Eli, adding a superfluous call statement make the tight loop faster.  The same speed might make sense given a modern superscalar processor, but faster?  
+
+variable:
+It was suggested by CAF that passing the global counter as a variable to the function might be faster, as it would avoid RIP relative addressing and potential false aliasing.  No difference.
+
+write, prefetch, readdummy, readself:
+Putting a memory access in between the store and the reload seems to help.   Reading an unrelated variable is fastest, but rereading the same works well to.  Best if the register is the same.   Maybe has to do with "Store-to-load forwarding" restrictions?  Call also uses Ports 2/3, so there is a commonality.
+
+jump, 2mod:
+Counter-counter-intuitively, calling 'call' only half the time speeds things up.  This is hard to make sense of.  Perhaps because the call prevents the Loop Stream Detector from functioning?
+
+exchange:
+Currently the fastest solution is to add what should be a no-op 'xchg reg,reg' between the load and the store.  The fastest is to use the same register as is being used for counter.  Using the counter register plus another is slightly less fast, and using two unrelated is worse.  Obviously this means it isn't working as a NOP.  
+
+
+
+
+
